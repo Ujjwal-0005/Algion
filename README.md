@@ -31,27 +31,28 @@ The server is organized into four distinct layers:
 ## Tech Stack
 
 - **Runtime:** Node.js v22.13.1
-- **Backend Framework:** Express v4.21.2
-- **Database:** MongoDB 7.0 with Mongoose v8.9.5
-- **Frontend:** React v19.3.1 with Vite v8.3.6
-- **Routing:** React Router v7.1.3
-- **Validation:** Zod v3.24.1
-- **Security:** bcrypt v5.1.1, jsonwebtoken v9.0.2, cookie-parser v1.4.7
-- **API Documentation:** Swagger UI Express v5.0.1, YAMLJS v0.3.0
-- **Testing:** Jest v29.7.0, Supertest v7.0.0, mongodb-memory-server v10.1.3, Vitest v3.0.4, React Testing Library v16.2.0
+- **Backend Framework:** Express ^4.21.2
+- **Database:** MongoDB 7.0 with Mongoose ^8.9.5
+- **Frontend:** React ^19.3.1 with Vite ^8.3.6
+- **Routing:** React Router ^7.1.3
+- **Validation:** Zod ^3.24.1
+- **Security:** bcrypt ^5.1.1, jsonwebtoken ^9.0.2, cookie-parser ^1.4.7
+- **API Documentation:** Swagger UI Express ^5.0.1, YAMLJS ^0.3.0
+- **Testing:** Jest ^29.7.0, Supertest ^7.0.0, mongodb-memory-server ^10.1.3, Vitest ^3.0.4, React Testing Library ^16.2.0
 
 ## Prerequisites
 
-- **Node.js:** v20.0.0 or higher (v22 tested)
+- **Node.js:** v20.0.0 or higher (v22.13.1 tested)
 - **Docker & Docker Compose:** Docker version 20.10+ (v29 tested) with Compose v2+
 
 ## Setup
 
 Follow these exact steps in order:
 
-1. Clone or navigate to the repository directory:
+1. Clone the repository and navigate into it:
    ```bash
-   cd d:/algion
+   git clone https://github.com/example/ecommerce-modular-monolith.git
+   cd ecommerce-modular-monolith
    ```
 
 2. Install all dependencies across the workspace:
@@ -64,12 +65,16 @@ Follow these exact steps in order:
 3. Create the environment file:
    ```bash
    cp .env.example .env
-   cp .env.example server/.env
    ```
+   The backend loads the root `.env` file directly (or `server/.env` if present), while the Vite client reads environment variables via the development proxy without needing a separate client `.env`.
 
 4. Start the MongoDB replica set with Docker:
    ```bash
    docker compose up -d
+   ```
+   The `mongo-init` service in `docker-compose.yml` initiates the single-node replica set (`rs0`) automatically once the database is healthy. If you run MongoDB outside Docker, initiate it manually in mongosh:
+   ```bash
+   mongosh --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] })'
    ```
 
 5. Run database migrations to build indexes:
@@ -105,7 +110,7 @@ These variables are defined in `.env.example`:
 | --- | --- | --- | --- |
 | `PORT` | `5000` | Optional | Port number for Express backend. Default is 5000. |
 | `NODE_ENV` | `development` | Optional | Environment mode (`development`, `test`, `production`). |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017/ecommerce?replicaSet=rs0` | Required | Connection string to MongoDB replica set. |
+| `MONGODB_URI` | `your_mongo_uri` | Required | Connection string to MongoDB replica set. |
 | `JWT_SECRET` | `your_secret_key` | Required | Secret key used to sign and verify authentication JWTs. |
 | `JWT_EXPIRES_IN` | `7d` | Optional | JWT lifetime (e.g., `7d` for seven days). |
 | `COOKIE_SECRET` | `localcookiesecret1234567890` | Required | Secret string used by cookie-parser to sign cookies. |
@@ -140,12 +145,12 @@ A promotional coupon `WELCOME10` is also created (10% discount on subtotals abov
 ## API Documentation
 
 - Interactive Swagger UI: [http://localhost:5000/api/docs](http://localhost:5000/api/docs)
-- OpenAPI 3.0 specification file: [openapi.yaml](file:///d:/algion/docs/openapi.yaml)
-- Plain API reference guide: [docs/api.md](file:///d:/algion/docs/api.md)
+- Raw OpenAPI 3.0.3 specification: [docs/openapi.yaml](docs/openapi.yaml)
+- API reference summary: [docs/api.md](docs/api.md)
 
 ## Database Diagram
 
-The complete entity-relationship diagram and index listings are documented in [docs/database.md](file:///d:/algion/docs/database.md).
+The complete entity-relationship diagram and index listings are documented in [docs/database.md](docs/database.md).
 
 ## Test Commands
 
@@ -205,12 +210,14 @@ algion/
 ## Known Limitations
 
 - **Simulated Payments Only:** No live payment gateway (Stripe or Razorpay) is integrated. The outcome is chosen using success and decline simulation buttons.
+- **Simulated Refunds:** Cancelling a paid order sets `payment.status` to `refunded_simulated` (while the order `status` becomes `CANCELLED`) and restores stock, but transfers no real money.
+- **Customer Cancellation Restrictions:** Customers can only cancel orders in `PLACED` state. Orders in `PAID` state must be cancelled and refunded by an admin.
+- **Address Limit:** Each user is restricted to a maximum of 10 embedded shipping addresses.
 - **No Email Sending:** The app records orders and audits internally, but does not send confirmation emails.
-- **Simulated Refunds:** Cancelling a paid order sets its status to `refunded_simulated` and restores stock, but transfers no real money.
 - **Image URLs Only:** Products accept external image URL strings. There is no file upload or S3 bucket integration.
 - **Single Currency:** The application only calculates in INR (paise). It does not support multi-currency exchanges.
 - **Manual Status Updates:** Status changes (`PACKED`, `SHIPPED`, `DELIVERED`) are performed manually by admins through buttons. There is no shipping carrier API integration.
 
 ## Technical Report
 
-For full architectural details, concurrency controls, and design decision rationales, read the [Technical Report](file:///d:/algion/docs/TECHNICAL_REPORT.md).
+For full architectural details, concurrency controls, and design decision rationales, read the [Technical Report](docs/TECHNICAL_REPORT.md).

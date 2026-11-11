@@ -2,6 +2,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const config = require('./config');
@@ -24,8 +25,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(config.cookieSecret));
 
-// Swagger UI Documentation
+// Raw OpenAPI spec endpoint
 const swaggerDocPath = path.resolve(__dirname, '../../docs/openapi.yaml');
+app.get('/api/docs/openapi.yaml', (req, res) => {
+  if (fs.existsSync(swaggerDocPath)) {
+    res.setHeader('Content-Type', 'text/yaml');
+    return res.sendFile(swaggerDocPath);
+  }
+  return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Spec not found' } });
+});
+
+// Swagger UI Documentation
 try {
   const swaggerDocument = YAML.load(swaggerDocPath);
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));

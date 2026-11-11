@@ -117,21 +117,22 @@ The testing suite contains unit and integration tests:
 
 ### Latest Test Results
 ```
-PASS server/tests/integration/acceptance.test.js
-PASS server/tests/unit/validation.test.js
-PASS server/tests/unit/pricing.test.js
-PASS server/tests/unit/orderStateMachine.test.js
-PASS server/tests/unit/idempotency.test.js
+Server (Jest)
+PASS tests/integration/acceptance.test.js
+PASS tests/unit/openapi.test.js
+PASS tests/unit/validation.test.js
+PASS tests/unit/pricing.test.js
+PASS tests/unit/orderStateMachine.test.js
+PASS tests/unit/idempotency.test.js
 
-Test Suites: 5 passed, 5 total
-Tests:       22 passed, 22 total
-Snapshots:   0 total
-Time:        10.652 s
+Test Suites: 6 passed, 6 total
+Tests:       25 passed, 25 total
 
-PASS client/src/test/cartAndCheckout.test.jsx
+Client (Vitest)
+PASS src/test/cartAndCheckout.test.jsx
+
 Test Files:  1 passed, 1 total
 Tests:       5 passed, 5 total
-Time:        2.24 s
 ```
 All 27 automated tests pass with 0 failures.
 

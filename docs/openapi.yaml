@@ -7,10 +7,702 @@ servers:
   - url: http://localhost:5000/api
     description: Local Development Server
 
+tags:
+  - name: auth
+    description: Customer registration, login, session, and address management
+  - name: catalogue
+    description: Public product discovery and search
+  - name: categories
+    description: Public category browsing
+  - name: cart
+    description: Customer cart management and promotional coupon application
+  - name: checkout
+    description: Transactional order placement with idempotency
+  - name: orders
+    description: Customer order lookup, simulated payment, and cancellation
+  - name: admin-products
+    description: Admin product and variant CRUD
+  - name: admin-inventory
+    description: Admin stock adjustments and low-stock queries
+  - name: admin-orders
+    description: Admin order management and state transitions
+  - name: admin-customers
+    description: Admin customer directory and order history inspection
+  - name: admin-coupons
+    description: Admin promotional coupon creation and deactivation
+  - name: admin-audit
+    description: Append-only system audit log inspection
+  - name: admin-reports
+    description: Aggregated business reports and invariant reconciliation
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+
+  parameters:
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique client-generated key preventing duplicate checkout requests.
+      schema:
+        type: string
+        example: idem_1794392284_a8f9c2d1
+    PageQueryParam:
+      name: page
+      in: query
+      required: false
+      description: Page number for paginated results (default 1).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+    LimitQueryParam:
+      name: limit
+      in: query
+      required: false
+      description: Number of items per page (default 12 for catalogue, default 20 for admin, max 50 or 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 12
+        example: 12
+
+  schemas:
+    Address:
+      type: object
+      required:
+        - label
+        - fullName
+        - phone
+        - line1
+        - city
+        - state
+        - postalCode
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034ab
+        label:
+          type: string
+          example: Home
+        fullName:
+          type: string
+          example: Rahul Sharma
+        phone:
+          type: string
+          example: "9876543210"
+        line1:
+          type: string
+          example: Flat 402, Lotus Apartments
+        line2:
+          type: string
+          example: Koramangala 4th Block
+        city:
+          type: string
+          example: Bengaluru
+        state:
+          type: string
+          example: Karnataka
+        postalCode:
+          type: string
+          example: "560034"
+        country:
+          type: string
+          default: India
+          example: India
+        isDefault:
+          type: boolean
+          default: false
+          example: true
+
+    User:
+      type: object
+      required:
+        - _id
+        - name
+        - email
+        - role
+        - addresses
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034a1
+        name:
+          type: string
+          example: Rahul Sharma
+        email:
+          type: string
+          format: email
+          example: customer1@example.com
+        role:
+          type: string
+          enum: [customer, admin]
+          example: customer
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+
+    Category:
+      type: object
+      required:
+        - _id
+        - name
+        - slug
+        - isActive
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034c1
+        name:
+          type: string
+          example: Apparel
+        slug:
+          type: string
+          example: apparel
+        isActive:
+          type: boolean
+          example: true
+
+    Variant:
+      type: object
+      required:
+        - _id
+        - productId
+        - sku
+        - priceMinor
+        - stock
+        - isActive
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034d1
+        productId:
+          type: string
+          example: 65b9e0f11a4362b8cf1034e1
+        sku:
+          type: string
+          example: TS-BLK-M
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            size: M
+            color: Black
+        priceMinor:
+          type: integer
+          minimum: 0
+          description: Price in minor integer units (paise). 49900 paise = ₹499.00.
+          example: 49900
+        stock:
+          type: integer
+          minimum: 0
+          description: Available inventory count (min 0).
+          example: 25
+        isActive:
+          type: boolean
+          example: true
+
+    Product:
+      type: object
+      required:
+        - _id
+        - name
+        - slug
+        - description
+        - categoryId
+        - isActive
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034e1
+        name:
+          type: string
+          example: Classic Crewneck T-Shirt
+        slug:
+          type: string
+          example: classic-crewneck-tshirt
+        description:
+          type: string
+          example: Premium organic cotton t-shirt built for daily comfort.
+        categoryId:
+          type: string
+          example: 65b9e0f11a4362b8cf1034c1
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500
+        isActive:
+          type: boolean
+          example: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+
+    CartLine:
+      type: object
+      required:
+        - variantId
+        - sku
+        - productName
+        - unitPriceMinor
+        - quantity
+        - lineTotalMinor
+      properties:
+        variantId:
+          type: string
+          example: 65b9e0f11a4362b8cf1034d1
+        sku:
+          type: string
+          example: TS-BLK-M
+        productName:
+          type: string
+          example: Classic Crewneck T-Shirt
+        productSlug:
+          type: string
+          example: classic-crewneck-tshirt
+        imageUrl:
+          type: string
+          nullable: true
+          example: https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500
+        attributes:
+          type: object
+          additionalProperties: { type: string }
+          example: { size: "M", color: "Black" }
+        unitPriceMinor:
+          type: integer
+          description: Unit price in whole paise.
+          example: 49900
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 10
+          example: 2
+        lineTotalMinor:
+          type: integer
+          description: Line item total in whole paise.
+          example: 99800
+        currentStock:
+          type: integer
+          example: 25
+        isInactive:
+          type: boolean
+          example: false
+        warning:
+          type: string
+          nullable: true
+          example: null
+
+    Cart:
+      type: object
+      required:
+        - items
+        - subtotalMinor
+        - discountMinor
+        - taxMinor
+        - shippingMinor
+        - totalMinor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartLine'
+        subtotalMinor:
+          type: integer
+          description: Sum of item line totals in whole paise.
+          example: 99800
+        discountMinor:
+          type: integer
+          description: Coupon discount deducted in whole paise.
+          example: 9980
+        taxMinor:
+          type: integer
+          description: Tax amount in whole paise (18% GST).
+          example: 16168
+        shippingMinor:
+          type: integer
+          description: Delivery fee in whole paise (0 when free shipping threshold is met).
+          example: 0
+        totalMinor:
+          type: integer
+          description: Final amount payable in whole paise.
+          example: 105988
+        couponCode:
+          type: string
+          nullable: true
+          example: WELCOME10
+        hasWarnings:
+          type: boolean
+          example: false
+
+    Coupon:
+      type: object
+      required:
+        - _id
+        - code
+        - type
+        - value
+        - minSubtotalMinor
+        - expiresAt
+        - isActive
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf1034f1
+        code:
+          type: string
+          example: WELCOME10
+        type:
+          type: string
+          enum: [percent, fixed]
+          example: percent
+        value:
+          type: integer
+          description: Discount value (percentage rate or fixed amount in whole paise).
+          example: 10
+        minSubtotalMinor:
+          type: integer
+          description: Minimum cart subtotal in paise required to use coupon.
+          example: 50000
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2027-12-31T23:59:59.000Z"
+        isActive:
+          type: boolean
+          example: true
+
+    OrderItem:
+      type: object
+      required:
+        - variantId
+        - productName
+        - sku
+        - unitPriceMinor
+        - quantity
+        - lineTotalMinor
+      properties:
+        variantId:
+          type: string
+          example: 65b9e0f11a4362b8cf1034d1
+        productName:
+          type: string
+          example: Classic Crewneck T-Shirt
+        sku:
+          type: string
+          example: TS-BLK-M
+        attributes:
+          type: object
+          additionalProperties: { type: string }
+          example: { size: "M" }
+        unitPriceMinor:
+          type: integer
+          description: Unit price snapshot in paise.
+          example: 49900
+        quantity:
+          type: integer
+          example: 2
+        lineTotalMinor:
+          type: integer
+          description: Total line amount snapshot in paise.
+          example: 99800
+
+    Order:
+      type: object
+      required:
+        - _id
+        - orderNumber
+        - userId
+        - status
+        - items
+        - shippingAddress
+        - subtotalMinor
+        - discountMinor
+        - taxMinor
+        - shippingMinor
+        - totalMinor
+        - idempotencyKey
+        - requestHash
+        - payment
+        - statusHistory
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf103501
+        orderNumber:
+          type: string
+          example: ORD-LX7Q1-4A9B
+        userId:
+          type: string
+          example: 65b9e0f11a4362b8cf1034a1
+        status:
+          type: string
+          enum: [PLACED, PAID, PACKED, SHIPPED, DELIVERED, PAYMENT_FAILED, CANCELLED]
+          example: PLACED
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        subtotalMinor:
+          type: integer
+          description: Subtotal in paise.
+          example: 99800
+        discountMinor:
+          type: integer
+          description: Discount in paise.
+          example: 0
+        taxMinor:
+          type: integer
+          description: Tax in paise.
+          example: 17964
+        shippingMinor:
+          type: integer
+          description: Shipping fee in paise.
+          example: 0
+        totalMinor:
+          type: integer
+          description: Final order total in paise.
+          example: 117764
+        couponCode:
+          type: string
+          nullable: true
+          example: null
+        idempotencyKey:
+          type: string
+          example: idem_1794392284_a8f9c2d1
+        requestHash:
+          type: string
+          example: a3b5c7d9e1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4
+        payment:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [pending, captured, failed, refunded_simulated]
+              example: pending
+            method:
+              type: string
+              example: simulated
+            attempts:
+              type: integer
+              example: 0
+        statusHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+                nullable: true
+                example: null
+              to:
+                type: string
+                example: PLACED
+              at:
+                type: string
+                format: date-time
+                example: "2026-11-11T12:00:00.000Z"
+              byUserId:
+                type: string
+                example: 65b9e0f11a4362b8cf1034a1
+
+    AuditLog:
+      type: object
+      required:
+        - _id
+        - actorRole
+        - action
+        - entityType
+        - entityId
+        - createdAt
+      properties:
+        _id:
+          type: string
+          example: 65b9e0f11a4362b8cf103511
+        actorId:
+          type: string
+          nullable: true
+          example: 65b9e0f11a4362b8cf1034a1
+        actorRole:
+          type: string
+          example: customer
+        action:
+          type: string
+          example: order.create
+        entityType:
+          type: string
+          example: Order
+        entityId:
+          type: string
+          example: 65b9e0f11a4362b8cf103501
+        before:
+          type: object
+          nullable: true
+          example: null
+        after:
+          type: object
+          nullable: true
+          example: { orderNumber: "ORD-LX7Q1-4A9B", status: "PLACED" }
+        reason:
+          type: string
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-11-11T12:00:00.000Z"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Invalid request data
+            details:
+              description: Optional array or object containing validation or error details
+              example:
+                - path: email
+                  message: Invalid email address
+
+  responses:
+    ValidationError:
+      description: 400 Bad Request returned when request payload, params, or query validation fails.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request data
+              details:
+                - path: email
+                  message: Invalid email address
+
+    InsufficientStockError:
+      description: 400 Bad Request returned when requested quantity exceeds available variant inventory.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INSUFFICIENT_STOCK
+              message: Insufficient stock for variant
+              details:
+                variantId: 65b9e0f11a4362b8cf1034d1
+                availableStock: 0
+                requestedQuantity: 1
+
+    UnauthenticatedError:
+      description: 401 Unauthorized returned when JWT authentication cookie is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: UNAUTHENTICATED
+              message: Authentication token missing
+
+    ForbiddenError:
+      description: 403 Forbidden returned when user does not have permission for the route.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: FORBIDDEN
+              message: Access restricted to admin role
+
+    NotFoundError:
+      description: 404 Not Found returned when the requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+
+    ConflictError:
+      description: 409 Conflict returned on unique index violations or status version mismatches.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: CONFLICT
+              message: Resource already exists or duplicate key violated
+
+    InvalidTransitionError:
+      description: 409 Conflict returned when an illegal order state transition is attempted.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INVALID_TRANSITION
+              message: Cannot transition order from status 'SHIPPED' to 'CANCELLED'
+
+    DuplicateRequestError:
+      description: 409 Conflict returned when an idempotency key is reused with a different request payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: DUPLICATE_REQUEST
+              message: Idempotency key reused with different request payload
+
 paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns server operational status and UTC timestamp.
+      security: []
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              example:
+                status: ok
+                timestamp: "2026-11-11T12:00:00.000Z"
+
   /auth/register:
     post:
+      tags: [auth]
       summary: Register a customer account
+      description: Registers a new customer and sets an httpOnly session cookie.
+      security: []
       requestBody:
         required: true
         content:
@@ -19,20 +711,28 @@ paths:
               type: object
               required: [name, email, password]
               properties:
-                name: { type: string, example: "Alice Smith" }
-                email: { type: string, example: "alice@example.com" }
-                password: { type: string, example: "Customer@12345" }
+                name: { type: string, example: "Alice Customer" }
+                email: { type: string, format: email, example: "customer1@example.com" }
+                password: { type: string, minLength: 6, example: "Customer@12345" }
       responses:
         '201':
           description: User registered successfully
-        '400':
-          description: VALIDATION_ERROR
-        '409':
-          description: CONFLICT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
 
   /auth/login:
     post:
-      summary: Log in with email and password
+      tags: [auth]
+      summary: Log in with credentials
+      description: Authenticates a user with email and password, setting an httpOnly JWT cookie.
+      security: []
       requestBody:
         required: true
         content:
@@ -41,95 +741,274 @@ paths:
               type: object
               required: [email, password]
               properties:
-                email: { type: string, example: "customer1@example.com" }
+                email: { type: string, format: email, example: "customer1@example.com" }
                 password: { type: string, example: "Customer@12345" }
       responses:
         '200':
-          description: Logged in and JWT cookie set
-        '401':
-          description: UNAUTHENTICATED
+          description: Logged in successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
 
   /auth/logout:
     post:
-      summary: Log out and clear cookie
+      tags: [auth]
+      summary: Log out current user
+      description: Clears the httpOnly authentication cookie.
+      security: []
       responses:
         '200':
           description: Logged out successfully
+          content:
+            application/json:
+              example:
+                message: Logged out successfully
 
   /auth/me:
     get:
-      summary: Get authenticated user profile
+      tags: [auth]
+      summary: Get current authenticated user
+      description: Reads JWT cookie and returns user profile.
+      security:
+        - cookieAuth: []
       responses:
         '200':
-          description: User profile
-        '401':
-          description: UNAUTHENTICATED
+          description: Profile retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /auth/addresses:
+    post:
+      tags: [auth]
+      summary: Add an address to profile
+      description: Appends a delivery address subdocument (maximum 10 allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, fullName, phone, line1, city, state, postalCode]
+              properties:
+                label: { type: string, example: "Home" }
+                fullName: { type: string, example: "Rahul Sharma" }
+                phone: { type: string, example: "9876543210" }
+                line1: { type: string, example: "Flat 402, Lotus Apartments" }
+                line2: { type: string, example: "Koramangala" }
+                city: { type: string, example: "Bengaluru" }
+                state: { type: string, example: "Karnataka" }
+                postalCode: { type: string, example: "560034" }
+                country: { type: string, default: "India", example: "India" }
+                isDefault: { type: boolean, default: false, example: true }
+      responses:
+        '201':
+          description: Address added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+
+  /auth/addresses/{addressId}:
+    patch:
+      tags: [auth]
+      summary: Update user address
+      description: Partially updates an existing address subdocument.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: addressId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034ab
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, example: "Office" }
+                line1: { type: string, example: "100 Commerce Boulevard" }
+                city: { type: string, example: "Bengaluru" }
+      responses:
+        '200':
+          description: Address updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      tags: [auth]
+      summary: Delete user address
+      description: Removes an address from the user profile.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: addressId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034ab
+      responses:
+        '200':
+          description: Address deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   /categories:
     get:
+      tags: [categories]
       summary: List active categories
+      description: Retrieves flat categories available for public browsing.
+      security: []
       responses:
         '200':
-          description: Array of categories
+          description: Categories retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
 
   /products:
     get:
-      summary: List and search products
+      tags: [catalogue]
+      summary: Search and filter products
+      description: Queries products with text search, category, price range, in-stock filter, and pagination.
+      security: []
       parameters:
         - name: q
           in: query
+          description: Text search across name and description.
           schema: { type: string }
+          example: mouse
         - name: categorySlug
           in: query
+          description: Category slug filter.
           schema: { type: string }
+          example: electronics
         - name: minPrice
           in: query
+          description: Minimum active variant price in paise.
           schema: { type: integer }
+          example: 100000
         - name: maxPrice
           in: query
+          description: Maximum active variant price in paise.
           schema: { type: integer }
+          example: 500000
         - name: inStock
           in: query
+          description: Set true to show only in-stock items.
           schema: { type: boolean }
+          example: true
         - name: sort
           in: query
-          schema: { type: string, enum: [price_asc, price_desc, newest, name_asc] }
-        - name: page
-          in: query
-          schema: { type: integer, default: 1 }
-        - name: limit
-          in: query
-          schema: { type: integer, default: 12 }
+          description: Sort ordering.
+          schema:
+            type: string
+            enum: [price_asc, price_desc, newest, name_asc]
+            default: newest
+          example: price_asc
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
       responses:
         '200':
           description: Paginated product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 12 }
+                  total: { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
 
   /products/{slug}:
     get:
-      summary: Get product details with active variants
+      tags: [catalogue]
+      summary: Get product details
+      description: Fetches a single product by slug along with its active variants.
+      security: []
       parameters:
         - name: slug
           in: path
           required: true
           schema: { type: string }
+          example: ergonomic-wireless-mouse
       responses:
         '200':
           description: Product details
-        '404':
-          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   /cart:
     get:
-      summary: Get priced cart for current customer
+      tags: [cart]
+      summary: Get priced cart
+      description: Returns the customer's cart with live variant pricing, tax, shipping, and stock warnings.
+      security:
+        - cookieAuth: []
       responses:
         '200':
-          description: Cart details
-        '401':
-          description: UNAUTHENTICATED
+          description: Priced cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
 
   /cart/items:
     post:
+      tags: [cart]
       summary: Add an item to cart
+      description: Adds a variant with a quantity between 1 and 10 after verifying current inventory.
+      security:
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -138,22 +1017,132 @@ paths:
               type: object
               required: [variantId, quantity]
               properties:
-                variantId: { type: string }
-                quantity: { type: integer, minimum: 1, maximum: 10 }
+                variantId: { type: string, example: "65b9e0f11a4362b8cf1034d1" }
+                quantity: { type: integer, minimum: 1, maximum: 10, example: 1 }
       responses:
         '200':
-          description: Item added
-        '400':
-          description: INSUFFICIENT_STOCK or VALIDATION_ERROR
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/InsufficientStockError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /cart/items/{variantId}:
+    patch:
+      tags: [cart]
+      summary: Update cart item quantity
+      description: Updates the quantity of a specific variant in the customer's cart.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: variantId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034d1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 1, maximum: 10, example: 2 }
+      responses:
+        '200':
+          description: Cart quantity updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/InsufficientStockError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      tags: [cart]
+      summary: Remove cart item
+      description: Deletes a variant line from the customer's cart.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: variantId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034d1
+      responses:
+        '200':
+          description: Item removed from cart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+
+  /cart/coupon:
+    post:
+      tags: [cart]
+      summary: Apply coupon code
+      description: Applies an active coupon to calculate discounts against the cart subtotal.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, example: "WELCOME10" }
+      responses:
+        '200':
+          description: Coupon applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      tags: [cart]
+      summary: Remove coupon code
+      description: Clears any active coupon applied to the cart.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Coupon removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cart: { $ref: '#/components/schemas/Cart' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
 
   /checkout:
     post:
-      summary: Checkout cart with transactional stock decrement
+      tags: [checkout]
+      summary: Checkout cart
+      description: Decrements inventory atomically within a MongoDB transaction and creates an order in PLACED state.
+      security:
+        - cookieAuth: []
       parameters:
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
         required: true
         content:
@@ -162,46 +1151,93 @@ paths:
               type: object
               required: [addressId]
               properties:
-                addressId: { type: string }
+                addressId: { type: string, example: "65b9e0f11a4362b8cf1034ab" }
       responses:
         '201':
-          description: Order created
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
         '200':
-          description: Idempotent repeat order returned
-        '400':
-          description: INSUFFICIENT_STOCK or VALIDATION_ERROR
-        '409':
-          description: DUPLICATE_REQUEST
+          description: Idempotent return of existing order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/InsufficientStockError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '409': { $ref: '#/components/responses/DuplicateRequestError' }
 
   /orders:
     get:
+      tags: [orders]
       summary: List customer orders
+      description: Returns orders placed by the currently authenticated customer.
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
       responses:
         '200':
-          description: Order list
+          description: Customer orders list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 10 }
+                  total: { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
 
   /orders/{id}:
     get:
-      summary: Get customer order by ID
+      tags: [orders]
+      summary: Get customer order detail
+      description: Retrieves details of an order belonging to the customer. Returns 404 if order belongs to another customer.
+      security:
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+          example: 65b9e0f11a4362b8cf103501
       responses:
         '200':
           description: Order details
-        '404':
-          description: NOT_FOUND
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 
   /orders/{id}/pay:
     post:
-      summary: Simulate payment outcome
+      tags: [orders]
+      summary: Simulate order payment
+      description: Simulates payment outcome. Success moves order to PAID. Decline moves order to PAYMENT_FAILED and restores stock.
+      security:
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+          example: 65b9e0f11a4362b8cf103501
       requestBody:
         required: true
         content:
@@ -210,43 +1246,813 @@ paths:
               type: object
               required: [outcome]
               properties:
-                method: { type: string, default: "simulated" }
-                outcome: { type: string, enum: [success, decline] }
+                method: { type: string, default: "simulated", example: "simulated" }
+                outcome: { type: string, enum: [success, decline], example: "success" }
       responses:
         '200':
-          description: Order payment status updated
-        '409':
-          description: INVALID_TRANSITION
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/InvalidTransitionError' }
 
   /orders/{id}/cancel:
     post:
+      tags: [orders]
       summary: Cancel customer order
+      description: Cancels an order in PLACED or PAID state and restores reserved inventory.
+      security:
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
+          example: 65b9e0f11a4362b8cf103501
       responses:
         '200':
-          description: Order cancelled and stock restored
-        '409':
-          description: INVALID_TRANSITION
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/InvalidTransitionError' }
+
+  /admin/categories:
+    get:
+      tags: [categories]
+      summary: List all categories (admin)
+      description: Returns both active and inactive categories for admin management.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      tags: [categories]
+      summary: Create a category
+      description: Creates a new product category.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, example: "Footwear" }
+                slug: { type: string, example: "footwear" }
+                isActive: { type: boolean, default: true, example: true }
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+
+  /admin/categories/{id}:
+    patch:
+      tags: [categories]
+      summary: Update a category
+      description: Modifies category name, slug, or active status.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034c1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "Footwear & Shoes" }
+                slug: { type: string, example: "footwear-shoes" }
+                isActive: { type: boolean, example: true }
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      tags: [categories]
+      summary: Delete or deactivate category
+      description: Deactivates category if referenced by products; deletes it permanently otherwise.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034c1
+      responses:
+        '200':
+          description: Category deleted or deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category: { $ref: '#/components/schemas/Category' }
+                  deactivated: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/products:
+    get:
+      tags: [admin-products]
+      summary: List all products (admin)
+      description: Returns products including inactive ones with embedded variant summaries.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: search
+          in: query
+          description: Search term matching product name or slug.
+          schema: { type: string }
+          example: classic
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+      responses:
+        '200':
+          description: Admin products list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  total: { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      tags: [admin-products]
+      summary: Create product with variants
+      description: Creates a new product with at least one variant.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, description, categoryId, variants]
+              properties:
+                name: { type: string, example: "Classic Crewneck T-Shirt" }
+                slug: { type: string, example: "classic-crewneck-tshirt" }
+                description: { type: string, example: "Premium organic cotton t-shirt built for daily comfort." }
+                categoryId: { type: string, example: "65b9e0f11a4362b8cf1034c1" }
+                imageUrl: { type: string, format: uri, example: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500" }
+                isActive: { type: boolean, default: true, example: true }
+                variants:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [sku, priceMinor]
+                    properties:
+                      sku: { type: string, example: "TS-BLK-S" }
+                      attributes: { type: object, additionalProperties: { type: string }, example: { size: "S", color: "Black" } }
+                      priceMinor: { type: integer, minimum: 0, example: 49900 }
+                      stock: { type: integer, minimum: 0, default: 0, example: 15 }
+                      isActive: { type: boolean, default: true, example: true }
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+                  variants: { type: array, items: { $ref: '#/components/schemas/Variant' } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+
+  /admin/products/{id}:
+    patch:
+      tags: [admin-products]
+      summary: Update product
+      description: Updates product metadata (name, description, category, image URL).
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034e1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, example: "Updated T-Shirt Name" }
+                description: { type: string, example: "Updated cotton description." }
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    delete:
+      tags: [admin-products]
+      summary: Deactivate product
+      description: Soft-deactivates product. Never hard-deletes products appearing in orders.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034e1
+      responses:
+        '200':
+          description: Product deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: { $ref: '#/components/schemas/Product' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/products/{productId}/variants:
+    post:
+      tags: [admin-products]
+      summary: Add variant to product
+      description: Appends a new SKU variant to an existing product.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034e1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, priceMinor]
+              properties:
+                sku: { type: string, example: "TS-RED-XL" }
+                attributes: { type: object, additionalProperties: { type: string }, example: { size: "XL", color: "Red" } }
+                priceMinor: { type: integer, minimum: 0, example: 54900 }
+                stock: { type: integer, minimum: 0, default: 0, example: 20 }
+                isActive: { type: boolean, default: true, example: true }
+      responses:
+        '201':
+          description: Variant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  variant: { $ref: '#/components/schemas/Variant' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+
+  /admin/variants/{id}:
+    patch:
+      tags: [admin-products]
+      summary: Update variant price or options
+      description: Updates priceMinor or isActive status on an individual variant.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034d1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                priceMinor: { type: integer, minimum: 0, example: 44900 }
+                isActive: { type: boolean, example: true }
+      responses:
+        '200':
+          description: Variant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  variant: { $ref: '#/components/schemas/Variant' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/variants/{id}/stock-adjustments:
+    post:
+      tags: [admin-inventory]
+      summary: Adjust variant inventory
+      description: Applies an integer stock adjustment delta with a mandatory audit reason. Rejects negative stock.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034d1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta, reason]
+              properties:
+                delta: { type: integer, example: 10 }
+                reason: { type: string, example: "Restocked from supplier shipment" }
+      responses:
+        '200':
+          description: Stock adjusted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  variant: { $ref: '#/components/schemas/Variant' }
+        '400': { $ref: '#/components/responses/InsufficientStockError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/inventory/low-stock:
+    get:
+      tags: [admin-inventory]
+      summary: Get low stock variants
+      description: Lists active variants with stock at or below the threshold (default 5 units).
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: threshold
+          in: query
+          schema: { type: integer, default: 5 }
+          example: 5
+      responses:
+        '200':
+          description: Low stock variants list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  variants:
+                    type: array
+                    items: { $ref: '#/components/schemas/Variant' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
+  /admin/orders:
+    get:
+      tags: [admin-orders]
+      summary: List all orders (admin)
+      description: Queries orders with filters by status, search term (orderNumber or email), and pagination.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PLACED, PAID, PACKED, SHIPPED, DELIVERED, PAYMENT_FAILED, CANCELLED]
+          example: PAID
+        - name: search
+          in: query
+          schema: { type: string }
+          example: customer1@example.com
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+      responses:
+        '200':
+          description: Admin orders list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  total: { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
+  /admin/orders/{id}:
+    get:
+      tags: [admin-orders]
+      summary: Get order details (admin)
+      description: Fetches complete order details, item snapshots, customer data, and status history.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf103501
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/orders/{id}/status:
+    patch:
+      tags: [admin-orders]
+      summary: Transition order status
+      description: Updates order state matching expectedStatus to prevent race conditions.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf103501
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, expectedStatus]
+              properties:
+                to:
+                  type: string
+                  enum: [PLACED, PAID, PACKED, SHIPPED, DELIVERED, PAYMENT_FAILED, CANCELLED]
+                  example: PACKED
+                expectedStatus:
+                  type: string
+                  enum: [PLACED, PAID, PACKED, SHIPPED, DELIVERED, PAYMENT_FAILED, CANCELLED]
+                  example: PAID
+      responses:
+        '200':
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+
+  /admin/customers:
+    get:
+      tags: [admin-customers]
+      summary: List registered customers
+      description: Returns customer accounts with total order counts.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+          example: rahul
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+      responses:
+        '200':
+          description: Customers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/User'
+                        - type: object
+                          properties:
+                            orderCount: { type: integer, example: 3 }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  total: { type: integer, example: 2 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+
+  /admin/customers/{id}:
+    get:
+      tags: [admin-customers]
+      summary: Get customer details
+      description: Returns customer profile and their order history.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034a1
+      responses:
+        '200':
+          description: Customer details with orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  customer: { $ref: '#/components/schemas/User' }
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/coupons:
+    get:
+      tags: [admin-coupons]
+      summary: List coupons
+      description: Returns all promotional coupons including inactive ones.
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Coupons list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coupons:
+                    type: array
+                    items: { $ref: '#/components/schemas/Coupon' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+    post:
+      tags: [admin-coupons]
+      summary: Create coupon
+      description: Creates a promotional coupon with percentage or fixed discount.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, type, value, expiresAt]
+              properties:
+                code: { type: string, example: "FESTIVE25" }
+                type: { type: string, enum: [percent, fixed], example: "percent" }
+                value: { type: integer, example: 25 }
+                minSubtotalMinor: { type: integer, default: 0, example: 100000 }
+                expiresAt: { type: string, format: date-time, example: "2027-12-31T23:59:59.000Z" }
+                isActive: { type: boolean, default: true, example: true }
+      responses:
+        '201':
+          description: Coupon created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coupon: { $ref: '#/components/schemas/Coupon' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+
+  /admin/coupons/{id}:
+    delete:
+      tags: [admin-coupons]
+      summary: Deactivate coupon
+      description: Deactivates an active promotional coupon.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034f1
+      responses:
+        '200':
+          description: Coupon deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coupon: { $ref: '#/components/schemas/Coupon' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+
+  /admin/audit-logs:
+    get:
+      tags: [admin-audit]
+      summary: View audit logs
+      description: Returns immutable audit records filtered by entityType, actorId, and date range.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: entityType
+          in: query
+          schema: { type: string, enum: [Order, Product, Variant, Category, Coupon, User] }
+          example: Order
+        - name: actorId
+          in: query
+          schema: { type: string }
+          example: 65b9e0f11a4362b8cf1034a1
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: '#/components/parameters/PageQueryParam'
+        - $ref: '#/components/parameters/LimitQueryParam'
+      responses:
+        '200':
+          description: Audit logs list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLog' }
+                  page: { type: integer, example: 1 }
+                  limit: { type: integer, example: 20 }
+                  total: { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
 
   /admin/reports/summary:
     get:
-      summary: Get sales summary and metrics
+      tags: [admin-reports]
+      summary: Summary sales report
+      description: Returns sales metrics, gross revenue, order status counts, and daily revenue series computed dynamically over orders.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
       responses:
         '200':
-          description: Aggregated metrics
-        '403':
-          description: FORBIDDEN
+          description: Summary report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                    properties:
+                      totalOrders: { type: integer, example: 10 }
+                      grossRevenueMinor: { type: integer, example: 4500000 }
+                      averageOrderValueMinor: { type: integer, example: 450000 }
+                      cancelledCount: { type: integer, example: 1 }
+                      paymentFailedCount: { type: integer, example: 1 }
+                      orderCountsByStatus:
+                        type: object
+                        additionalProperties: { type: integer }
+                      dailyRevenueSeries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date: { type: string, example: "2026-11-11" }
+                            revenueMinor: { type: integer, example: 4500000 }
+                            orderCount: { type: integer, example: 10 }
+                      lowStockVariants:
+                        type: array
+                        items: { $ref: '#/components/schemas/Variant' }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
 
   /admin/reports/reconciliation:
     get:
-      summary: Run system invariants check
+      tags: [admin-reports]
+      summary: Invariant reconciliation report
+      description: Validates database invariants (daily revenue sum, order count sum, variant inventory balance) and returns pass/fail status.
+      security:
+        - cookieAuth: []
       responses:
         '200':
-          description: Status of all reconciliation checks
-        '403':
-          description: FORBIDDEN
-
+          description: Reconciliation report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allPassed: { type: boolean, example: true }
+                  checks:
+                    type: object
+                    properties:
+                      dailySeriesMatchesGrossRevenue:
+                        type: object
+                        properties:
+                          pass: { type: boolean, example: true }
+                      statusCountsSumMatchesTotalOrders:
+                        type: object
+                        properties:
+                          pass: { type: boolean, example: true }
+                      variantInventoryIntegrity:
+                        type: object
+                        properties:
+                          pass: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/UnauthenticatedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }

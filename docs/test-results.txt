@@ -1,0 +1,34 @@
+
+> ecommerce-modular-monolith@1.0.0 test
+> npm --workspace=server run test && npm --workspace=client run test
+
+
+> server@1.0.0 test
+> jest --runInBand --detectOpenHandles
+
+PASS tests/integration/acceptance.test.js (7.012 s)
+PASS tests/unit/openapi.test.js
+PASS tests/unit/validation.test.js
+PASS tests/unit/pricing.test.js
+PASS tests/unit/orderStateMachine.test.js
+PASS tests/unit/idempotency.test.js
+
+Test Suites: 6 passed, 6 total
+Tests:       25 passed, 25 total
+Snapshots:   0 total
+Time:        8.398 s, estimated 9 s
+Ran all test suites.
+
+> client@0.0.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/algion/client[39m
+
+ [32m✓[39m src/test/cartAndCheckout.test.jsx [2m([22m[2m5 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m   Start at [22m 18:51:37
+[2m   Duration [22m 1.96s[2m (transform 108ms, setup 169ms, collect 263ms, tests 128ms, environment 980ms, prepare 193ms)[22m
+

@@ -1,0 +1,8 @@
+extends:
+  - minimal
+
+rules:
+  no-server-example.com: off
+  operation-4xx-response: off
+  operation-operationId: off
+  info-license: off
