@@ -1,0 +1,252 @@
+openapi: 3.0.3
+info:
+  title: E-Commerce Modular Monolith API
+  version: 1.0.0
+  description: Modular-monolith e-commerce REST API built with Node.js, Express, and MongoDB.
+servers:
+  - url: http://localhost:5000/api
+    description: Local Development Server
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a customer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, example: "Alice Smith" }
+                email: { type: string, example: "alice@example.com" }
+                password: { type: string, example: "Customer@12345" }
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: VALIDATION_ERROR
+        '409':
+          description: CONFLICT
+
+  /auth/login:
+    post:
+      summary: Log in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: "customer1@example.com" }
+                password: { type: string, example: "Customer@12345" }
+      responses:
+        '200':
+          description: Logged in and JWT cookie set
+        '401':
+          description: UNAUTHENTICATED
+
+  /auth/logout:
+    post:
+      summary: Log out and clear cookie
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/me:
+    get:
+      summary: Get authenticated user profile
+      responses:
+        '200':
+          description: User profile
+        '401':
+          description: UNAUTHENTICATED
+
+  /categories:
+    get:
+      summary: List active categories
+      responses:
+        '200':
+          description: Array of categories
+
+  /products:
+    get:
+      summary: List and search products
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: categorySlug
+          in: query
+          schema: { type: string }
+        - name: minPrice
+          in: query
+          schema: { type: integer }
+        - name: maxPrice
+          in: query
+          schema: { type: integer }
+        - name: inStock
+          in: query
+          schema: { type: boolean }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [price_asc, price_desc, newest, name_asc] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 12 }
+      responses:
+        '200':
+          description: Paginated product list
+
+  /products/{slug}:
+    get:
+      summary: Get product details with active variants
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Product details
+        '404':
+          description: NOT_FOUND
+
+  /cart:
+    get:
+      summary: Get priced cart for current customer
+      responses:
+        '200':
+          description: Cart details
+        '401':
+          description: UNAUTHENTICATED
+
+  /cart/items:
+    post:
+      summary: Add an item to cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, quantity]
+              properties:
+                variantId: { type: string }
+                quantity: { type: integer, minimum: 1, maximum: 10 }
+      responses:
+        '200':
+          description: Item added
+        '400':
+          description: INSUFFICIENT_STOCK or VALIDATION_ERROR
+
+  /checkout:
+    post:
+      summary: Checkout cart with transactional stock decrement
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addressId]
+              properties:
+                addressId: { type: string }
+      responses:
+        '201':
+          description: Order created
+        '200':
+          description: Idempotent repeat order returned
+        '400':
+          description: INSUFFICIENT_STOCK or VALIDATION_ERROR
+        '409':
+          description: DUPLICATE_REQUEST
+
+  /orders:
+    get:
+      summary: List customer orders
+      responses:
+        '200':
+          description: Order list
+
+  /orders/{id}:
+    get:
+      summary: Get customer order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order details
+        '404':
+          description: NOT_FOUND
+
+  /orders/{id}/pay:
+    post:
+      summary: Simulate payment outcome
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                method: { type: string, default: "simulated" }
+                outcome: { type: string, enum: [success, decline] }
+      responses:
+        '200':
+          description: Order payment status updated
+        '409':
+          description: INVALID_TRANSITION
+
+  /orders/{id}/cancel:
+    post:
+      summary: Cancel customer order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order cancelled and stock restored
+        '409':
+          description: INVALID_TRANSITION
+
+  /admin/reports/summary:
+    get:
+      summary: Get sales summary and metrics
+      responses:
+        '200':
+          description: Aggregated metrics
+        '403':
+          description: FORBIDDEN
+
+  /admin/reports/reconciliation:
+    get:
+      summary: Run system invariants check
+      responses:
+        '200':
+          description: Status of all reconciliation checks
+        '403':
+          description: FORBIDDEN
+

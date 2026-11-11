@@ -1,6 +1,9 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const path = require('path');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
 const config = require('./config');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -21,6 +24,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(config.cookieSecret));
 
+// Swagger UI Documentation
+const swaggerDocPath = path.resolve(__dirname, '../../docs/openapi.yaml');
+try {
+  const swaggerDocument = YAML.load(swaggerDocPath);
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+} catch (e) {
+  console.warn('Swagger doc failed to load:', e.message);
+}
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -37,4 +49,3 @@ app.use('/api/admin', adminRoutes);
 app.use(errorHandler);
 
 module.exports = app;
-
